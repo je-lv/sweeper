@@ -1,0 +1,54 @@
+# ─── Engagement data — MUST NEVER be committed ────────────────────────────────
+# This is a scanning tool. Anything it produces contains live target data.
+recon/
+output/
+runs/
+*.jsonl
+!tests/fixtures/*.jsonl
+report.md
+report.html
+
+# Auth material captured or generated at runtime
+auth/
+*.secret
+secret-file*.yaml
+*.burp
+raw-request*.txt
+
+# Target lists — hostnames are engagement-sensitive
+targets*.txt
+!targets.example.txt
+# Include editor and manual backup forms; `targets*.txt` does not match
+# names such as `targets.txt.bak`.
+targets*.txt.*
+*.txt.bak
+
+# Run output may go to an operator-chosen --outdir. Add engagement-specific
+# output directories here before the first run.
+
+# Saved run profiles may embed auth and target detail
+*.profile
+profiles/
+!profiles/*.example.profile
+
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+resume.cfg
+
+# ─── Editors / OS ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# SDD scratch workspace (ledger, briefs, review packages)
+.superpowers/

@@ -1,0 +1,9 @@
+{"commandline":"ffuf ...","time":"2026-07-29T09:12:00-04:00","config":{},"results":[
+{"input":{"FFUFHASH":"b1","FUZZ":"aaa"},"position":1,"status":200,"length":100,"words":10,"lines":9,"content-type":"text/html","url":"https://acc.example/","host":"aaa"},
+{"input":{"FFUFHASH":"b2","FUZZ":"bbb"},"position":2,"status":200,"length":100,"words":10,"lines":9,"content-type":"text/html","url":"https://acc.example/","host":"bbb"},
+{"input":{"FFUFHASH":"b3","FUZZ":"ccc"},"position":3,"status":200,"length":100,"words":10,"lines":9,"content-type":"text/html","url":"https://acc.example/","host":"ccc"},
+{"input":{"FFUFHASH":"b4","FUZZ":"ddd"},"position":4,"status":200,"length":100,"words":10,"lines":9,"content-type":"text/html","url":"https://acc.example/","host":"ddd"},
+{"input":{"FFUFHASH":"b5","FUZZ":"admin"},"position":5,"status":200,"length":9931,"words":310,"lines":220,"content-type":"text/html","url":"https://acc.example/","host":"admin"},
+{"input":{"FFUFHASH":"b6","FUZZ":"staging"},"position":6,"status":200,"length":5555,"words":150,"lines":100,"content-type":"text/html","url":"https://acc.example/","host":"staging"},
+{"input":{"FFUFHASH":"b7","FUZZ":"internal"},"position":7,"status":200,"length":7777,"words":210,"lines":140,"content-type":"text/html","url":"https://acc.example/","host":"internal"}
+]}

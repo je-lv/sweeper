@@ -1,0 +1,4 @@
+{"timestamp":"2026-07-29T09:00:00Z","request":{"method":"GET","endpoint":"https://acc.example/"},"response":{"status_code":200,"headers":{"Content-Type":"text/html"}}}
+{"timestamp":"2026-07-29T09:00:01Z","request":{"method":"GET","endpoint":"https://acc.example/static/app.bundle.js","tag":"script","attribute":"src"},"response":{"status_code":200,"headers":{"Content-Type":"application/javascript"},"content_length":91234}}
+{"timestamp":"2026-07-29T09:00:02Z","request":{"method":"GET","endpoint":"https://acc.example/search?q=shoes&cat=3"},"response":{"status_code":200,"headers":{"Content-Type":"text/html"}}}
+{"timestamp":"2026-07-29T09:00:03Z","request":{"method":"GET","endpoint":"https://cdn.other.example/lib.js"},"response":{"status_code":200,"headers":{"Content-Type":"application/javascript"}}}

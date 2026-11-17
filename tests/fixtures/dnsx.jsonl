@@ -1,0 +1,11 @@
+{"host":"acc.example","ttl":79,"a":["93.184.216.34"],"aaaa":["2606:2800:220:1:248:1893:25c8:1946"],"mx":[""],"ns":["ns1.acc.example","ns2.acc.example"],"txt":["v=spf1 include:_spf.example.com ~all","google-site-verification=abc123"],"status_code":"NOERROR"}
+{"host":"internal.acc.example","a":["10.0.14.22"],"status_code":"NOERROR"}
+{"host":"nospf.acc.example","a":["93.184.216.35"],"txt":["some-unrelated-record"],"status_code":"NOERROR"}
+{"host":"weak.acc.example","a":["93.184.216.36"],"txt":["v=spf1 +all"],"status_code":"NOERROR"}
+{"host":"cname.acc.example","cname":["orphan.s3.amazonaws.com"],"status_code":"NOERROR"}
+{"host":"mail.acc.example","a":["93.184.216.37"],"mx":["mx1.acc.example"],"txt":["some-unrelated-record"],"status_code":"NOERROR"}
+{"host":"fake.acc.example","cname":["fakegithub.io"],"status_code":"NOERROR"}
+{"host":"shop.acc.example","cname":["evilshopify.com"],"status_code":"NOERROR"}
+{"host":"tm.acc.example","cname":["eviltrafficmanager.net"],"status_code":"NOERROR"}
+{"host":"fqdn.acc.example","cname":["orphan.herokuapp.com."],"status_code":"NOERROR"}
+{"host":"multihomed.acc.example","a":["10.0.0.5","192.168.1.9"],"status_code":"NOERROR"}

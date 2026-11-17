@@ -1,0 +1,5 @@
+{"commandline":"ffuf ...","time":"2026-07-29T09:12:00-04:00","config":{},"results":[
+{"input":{"FFUFHASH":"a1","FUZZ":"admin"},"position":1,"status":200,"length":48210,"words":1204,"lines":900,"content-type":"text/html","url":"https://acc.example/","host":"admin"},
+{"input":{"FFUFHASH":"a2","FUZZ":"staging"},"position":2,"status":200,"length":48210,"words":1204,"lines":900,"content-type":"text/html","url":"https://acc.example/","host":"staging"},
+{"input":{"FFUFHASH":"a3","FUZZ":"internal"},"position":3,"status":200,"length":9931,"words":310,"lines":220,"content-type":"text/html","url":"https://acc.example/","host":"internal"}
+]}

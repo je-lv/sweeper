@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<nmaprun>
+<host><address addr="93.184.216.34" addrtype="ipv4"/>
+<hostnames><hostname name="acc.example"/></hostnames>
+<ports>
+<port protocol="tcp" portid="443"><state state="open"/>
+<service name="https" product="nginx" version="1.24.0"/></port>
+<port protocol="tcp" portid="22"><state state="open"/>
+<service name="ssh" product="OpenSSH" version="7.4"/></port>
+<port protocol="tcp" portid="8080"><state state="closed"/>
+<service name="http-proxy"/></port>
+</ports></host>
+</nmaprun>

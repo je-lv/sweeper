@@ -1,0 +1,4 @@
+{"ip":"93.184.216.34","host":"acc.example","timestamp":"2026-07-29T12:12:11Z","port":443,"protocol":"tcp","tls":true}
+{"ip":"93.184.216.34","host":"acc.example","timestamp":"2026-07-29T12:12:13Z","port":443,"protocol":"tcp","tls":true}
+{"ip":"93.184.216.34","host":"acc.example","timestamp":"2026-07-29T12:12:14Z","port":80,"protocol":"tcp","tls":false}
+{"ip":"93.184.216.35","timestamp":"2026-07-29T12:12:15Z","port":8080,"protocol":"tcp","tls":false}

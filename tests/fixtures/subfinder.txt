@@ -1,0 +1,4 @@
+shop.acc.example
+api.acc.example
+admin.acc.example
+legacy.acc.example

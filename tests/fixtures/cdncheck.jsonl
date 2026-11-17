@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-30T06:00:00.000000000Z","input":"acc.example","ip":"104.20.23.154","cdn":true,"cdn_name":"cloudflare"}
+{"timestamp":"2026-07-30T06:00:00.000000000Z","input":"waf.acc.example","ip":"104.20.23.155","waf":true,"waf_name":"cloudflare"}

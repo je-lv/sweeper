@@ -1,0 +1,546 @@
+{% autoescape true -%}
+{#-
+  sweeper HTML report -- single file, no network.
+
+  ESCAPING. This template carries its own {% autoescape %} block on purpose.
+  Jinja's idiomatic `select_autoescape()` matches on the LAST extension and
+  returns FALSE for a file named `*.html.j2`, so an environment built the
+  obvious way would render this template unescaped. Findings carry
+  attacker-influenced strings (scanner output, response snippets, crawled
+  URLs) and this file is opened in the operator's browser, so unescaped
+  interpolation would be stored XSS in our own deliverable. The block makes
+  escaping a property of the template rather than of whoever renders it.
+
+  NO NETWORK. Everything is inline: no CDN, no web font, no image, no
+  `url()` anywhere. A report that phones home when opened tells a third
+  party which engagement is being read, and when. Two consequences that are
+  easy to miss: nothing attacker-influenced may reach a CSS context (a
+  `url()` smuggled through a style attribute is a live request), and nothing
+  attacker-influenced may reach the <script> block (HTML escaping is the
+  wrong escaping there). Both are enforced structurally below -- severities
+  are mapped onto a fixed set before they touch a CSS variable, and the only
+  interpolation inside <script> is that same fixed severity list.
+
+  COLOUR IS NEVER THE ONLY CHANNEL. The palette is validated against the
+  surface (CVD separation, contrast >= 3:1) but `info` is deliberately
+  achromatic and adjacent hues sit near the delta-E floor, so every severity
+  always renders its text label next to its colour -- in the chips, in the
+  distribution, and in the table. Colour-blind readers and printed copies
+  both read the word.
+
+  BANNER LABELS ARE A CONTRACT WITH THE MARKDOWN REPORT. Each banner below
+  opens with a <strong> whose text matches, character for character, the
+  bolded label the Markdown report leads its matching blockquote with --
+  "RUN ABORTED", "DEGRADED RUN", "<n> RUN WARNING(S)", "<n> FINDING ID
+  COLLISION(S) DETECTED" -- and the aborted/degraded pair is an if/elif in
+  both, so the same run leads with the same set of labels in both
+  deliverables. test_html_leads_with_every_signal_the_markdown_leads_with
+  compares those two sets; it is a set comparison rather than a check for
+  three known names, so a signal added to either report and not the other
+  fails it. Reword a label here only together with markdown.py.
+
+  CONTEXT: run_name, level, auth_mode, started, degraded, aborted_reason,
+  warnings, finding_collisions, counts, findings, assets, coverage,
+  refusals, discoveries_refused, tool_versions, targets_requested,
+  targets_permitted, ports, udp_ports, proxy. Nothing
+  else -- everything else on this page is derived below with {% set %} so
+  that the contract with the renderer stays small. On a finding dict only
+  `severity` and `title` are required. `assets` maps a label to
+  {total, shown, truncated}: `total` is how many exist and `shown` is what
+  is inlined, and they are separate because a truncation notice counted as
+  an inventory item once made this page say "Ports (201)" where the
+  Markdown said "Ports (500)".
+-#}
+{%- set order = ['critical', 'high', 'medium', 'low', 'info'] -%}
+{%- set stage_options = findings|map(attribute='stage', default='')|select|unique|sort|list -%}
+{%- set host_options = findings|map(attribute='target', default='')|select|unique|sort|list -%}
+{%- set counted = counts.values()|sum -%}
+{%- set shown = findings|length -%}
+{%- set max_count = ([1] + (counts.values()|list))|max -%}
+{%- set has_unknown = findings|rejectattr('severity', 'in', order)|list|length > 0 -%}
+{%- set chips = order + ['unknown'] if has_unknown else order -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sweeper — {{ run_name }}</title>
+<style>
+  /* Severity palette validated against surface #0e0e14 with the dataviz
+     validator: lightness band, chroma floor, CVD separation, contrast >= 3:1.
+     `info` is deliberately achromatic muted ink — the lowest severity should
+     recede — and every severity always ships with its text label, so color
+     never carries meaning alone. */
+  :root{
+    --surface:#0e0e14; --panel:#15151f; --panel-2:#1c1c28;
+    --ink:#e8e8f0; --ink-2:#a9a9bd; --muted:#898781;
+    --grid:#26263a; --accent:#3987e5;
+    --sev-critical:#e0484f; --sev-high:#d9663a; --sev-medium:#c98500;
+    --sev-low:#3987e5; --sev-info:#898781; --sev-unknown:#d55181;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--surface);color:var(--ink);
+    overflow-wrap:anywhere;
+    font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  header{padding:24px 20px 12px;border-bottom:1px solid var(--grid)}
+  h1{margin:0 0 4px;font-size:20px;letter-spacing:.06em}
+  h1 .tag{color:var(--accent)}
+  .sub{color:var(--ink-2);font-size:12px}
+  .banner{margin:12px 20px 0;padding:10px 12px;border-radius:6px;
+    background:rgba(224,72,79,.12);border:1px solid var(--sev-critical);
+    color:var(--ink)}
+  /* A run warning is not a coverage failure -- amber, not red -- but the
+     word in the <strong> is what actually distinguishes them, here as in
+     the severity chips. */
+  .banner.warn{background:rgba(201,133,0,.12);border-color:var(--sev-medium)}
+  .banner .why{margin:6px 0 0;color:var(--ink-2)}
+  .banner ul{margin:6px 0 0;padding-left:18px;color:var(--ink-2)}
+  .banner li{word-break:break-all}
+  main{padding:16px 20px 48px}
+  section{margin-bottom:28px}
+  h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-2);margin:0 0 10px;font-weight:600}
+  h3{font-size:12px;letter-spacing:.1em;color:var(--ink);
+    margin:18px 0 6px;font-weight:600}
+
+  /* severity distribution — horizontal bars, 4px rounded data-end,
+     2px surface gap between bars, value labelled directly. A zero count
+     draws no bar at all: a minimum-width sliver reads as "a few". */
+  .dist{display:grid;gap:2px;max-width:640px}
+  .dist .row{display:grid;grid-template-columns:88px 1fr 44px;
+    align-items:center;gap:10px}
+  .dist .track{display:block;height:14px}
+  .dist .bar{display:block;height:14px;border-radius:0 4px 4px 0;min-width:2px}
+  .dist .n{color:var(--ink-2);text-align:right}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;
+    letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+  .dot{width:9px;height:9px;border-radius:2px;flex:none}
+
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    margin-bottom:12px}
+  .controls input,.controls select{background:var(--panel-2);color:var(--ink);
+    border:1px solid var(--grid);border-radius:5px;padding:6px 8px;
+    font:12px ui-monospace,monospace}
+  .controls input{min-width:220px;max-width:100%}
+  .sevtoggle{border:1px solid var(--grid);background:var(--panel-2);
+    color:var(--ink-2);border-radius:5px;padding:5px 9px;cursor:pointer;
+    font:11px ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}
+  .sevtoggle[aria-pressed="true"]{color:var(--ink);border-color:currentColor}
+  .sevtoggle[aria-pressed="false"]{text-decoration:line-through;opacity:.55}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--grid);border-radius:8px}
+  table{border-collapse:collapse;width:100%;min-width:820px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--grid);
+    vertical-align:top}
+  th{color:var(--ink-2);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;cursor:pointer;user-select:none;
+    background:var(--panel);position:sticky;top:0}
+  tr.finding{cursor:pointer}
+  tr.finding:hover{background:var(--panel)}
+  tr.detail td{background:var(--panel-2);color:var(--ink-2);font-size:12px}
+  tr.detail dt{color:var(--ink);margin-top:6px}
+  tr.detail pre{white-space:pre-wrap;word-break:break-all;margin:4px 0 0}
+  .muted{color:var(--muted)}
+  .empty{color:var(--ink-2);padding:14px}
+  details summary{cursor:pointer;color:var(--ink-2)}
+  ul.assets{margin:6px 0 0;padding-left:18px;color:var(--ink-2)}
+  ul.assets li{word-break:break-all}
+  .cov td:first-child{color:var(--ink)}
+
+  /* Printed, the dark surface is unreadable and colour is often lost
+     entirely — which is the other reason every severity prints its word. */
+  @media print{
+    :root{--surface:#fff;--panel:#f4f4f4;--panel-2:#fafafa;--ink:#111;
+      --ink-2:#444;--muted:#555;--grid:#bbb}
+    .controls{display:none}
+    .tablewrap{overflow:visible}
+    table{min-width:0}
+    tr.detail[hidden]{display:table-row !important}
+    .dot{border:1px solid #111}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>sweeper<span class="tag">//</span>{{ run_name }}</h1>
+  <div class="sub">
+    level <strong>{{ level }}</strong> ·
+    auth <strong>{{ auth_mode }}</strong> ·
+    started {{ started }} ·
+    {{ shown }} findings
+  </div>
+</header>
+
+{#- if/elif, exactly as the Markdown report does it: an aborted run IS
+    degraded (summarize_coverage folds aborted_reason in), and stacking
+    both banners would say the smaller thing twice. The reason is printed,
+    because "DEGRADED RUN" with no cause is what an operator sees after
+    Ctrl-C and cannot act on. -#}
+{% if aborted_reason %}
+<div class="banner">
+  <strong>RUN ABORTED</strong> — the scan stopped before completing.
+  Nothing below represents full coverage.
+  <p class="why">Reason: {{ aborted_reason }}</p>
+</div>
+{% elif degraded %}
+<div class="banner">
+  <strong>DEGRADED RUN</strong> — one or more stages did not complete.
+  See <em>Coverage</em> before treating this as full coverage.
+</div>
+{% endif %}
+
+{#- A collision means a stage's matcher failed to tell two genuinely
+    different findings apart: the first was kept, the second was not, and
+    every count on this page is drawn from what the store holds. Led with,
+    next to the banner above, because a report that quietly rounds down is
+    worse than one that admits the gap. -#}
+{% if finding_collisions %}
+<div class="banner">
+  <strong>{{ finding_collisions|length }} FINDING ID COLLISION{{ 'S' if finding_collisions|length != 1 else '' }} DETECTED</strong>
+  — one or more stages found two different issues that hashed to the same
+  id. Only the first was kept per collision; the finding counts in this
+  report may be an UNDERCOUNT. See <em>Finding ID collisions</em> below.
+</div>
+{% endif %}
+
+{#- Decide-and-inform notices raised at run start (RunContext.warnings):
+    things the run proceeded despite. The arjun `ps` credential exposure is
+    the current case, and a reader of this file needs to know credentials
+    were visible in the process list on the scanning host -- they are far
+    more likely to open this page than run.json. -#}
+{% if warnings %}
+<div class="banner warn">
+  <strong>{{ warnings|length }} RUN WARNING{{ 'S' if warnings|length != 1 else '' }}</strong>
+  — the run continued, and the operator was informed at run start:
+  <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<main>
+
+<section>
+  <h2>Severity distribution</h2>
+  <div class="dist">
+    {% for sev in order %}
+    {%- set c = counts.get(sev, 0) %}
+    <div class="row">
+      <span class="chip"><span class="dot" style="background:var(--sev-{{ sev }})"></span>{{ sev }}</span>
+      <span class="track">{% if c %}<span class="bar"
+        style="background:var(--sev-{{ sev }});width:{{ (100.0 * c / max_count)|round(1) }}%"></span>{% endif %}</span>
+      <span class="n">{{ c }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% if counted != shown %}
+  {#- Finding-count reconciliation, at the last mile: no single number in
+      this report may stand in for a different one. If the distribution and
+      the table disagree (triage filtering, for instance) both are printed
+      rather than letting the larger one speak for the report. -#}
+  <p class="muted">Distribution totals {{ counted }} across all severities;
+    {{ shown }} listed in the table below.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Findings</h2>
+  <div class="controls">
+    {% for sev in chips %}
+    <button type="button" class="sevtoggle" id="filter-severity-{{ sev }}"
+            data-sev="{{ sev }}" aria-pressed="true"
+            style="color:var(--sev-{{ sev }})">{{ sev }}</button>
+    {% endfor %}
+    <select id="filter-stage" aria-label="filter by stage"><option value="">all stages</option>
+      {% for s in stage_options %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    <select id="filter-host" aria-label="filter by target"><option value="">all targets</option>
+      {% for h in host_options %}<option value="{{ h }}">{{ h }}</option>{% endfor %}
+    </select>
+    <input id="filter-search" type="search" aria-label="search findings"
+           placeholder="search title, template, evidence…">
+    <span class="muted"><span id="shown-count">{{ shown }}</span> of {{ shown }} shown</span>
+  </div>
+
+  <div class="tablewrap">
+    <table id="findings">
+      <thead><tr>
+        <th data-sort="sev" tabindex="0">Severity</th><th data-sort="title" tabindex="0">Title</th>
+        <th data-sort="target" tabindex="0">Target</th><th data-sort="stage" tabindex="0">Stage</th>
+        <th data-sort="template" tabindex="0">Template</th><th data-sort="triage" tabindex="0">Triage</th>
+      </tr></thead>
+      <tbody>
+      {% for f in findings %}
+        {#- `sev` is the finding's severity mapped onto the fixed set, and it
+            is the ONLY thing allowed into a CSS variable or a filter value:
+            an unconstrained severity in `var(--sev-{{ ... }})` would be a CSS
+            injection, and `url(http://...)` inside it would be a live network
+            request. The label below still prints the raw value, escaped, so
+            nothing is hidden from the operator. -#}
+        {%- set sev = f.severity if f.severity in order else 'unknown' %}
+        {%- set haystack = (f.title|default('', true) ~ ' ' ~ f.template_id|default('', true)
+              ~ ' ' ~ f.evidence|default('', true) ~ ' ' ~ f.target|default('', true)
+              ~ ' ' ~ f.stage|default('', true))|lower %}
+        <tr class="finding" tabindex="0" aria-expanded="false"
+            data-sev="{{ sev }}" data-stage="{{ f.stage|default('', true) }}"
+            data-host="{{ f.target|default('', true) }}" data-idx="{{ loop.index0 }}"
+            data-text="{{ haystack }}">
+          <td><span class="chip"><span class="dot"
+              style="background:var(--sev-{{ sev }})"></span>{{ f.severity|default('', true) }}</span></td>
+          <td>{{ f.title|default('', true) }}</td>
+          <td class="muted">{{ f.target|default('', true) }}</td>
+          <td class="muted">{{ f.stage|default('', true) }}</td>
+          <td class="muted">{{ f.template_id|default('', true) }}</td>
+          <td class="muted">{{ f.triage|default('', true) }}</td>
+        </tr>
+        <tr class="detail" id="d{{ loop.index0 }}" hidden><td colspan="6">
+          <dl>
+            {% if f.matched_at|default('', true) %}<dt>Matched at</dt><dd><pre>{{ f.matched_at }}</pre></dd>{% endif %}
+            {% if f.description|default('', true) %}<dt>Description</dt><dd>{{ f.description }}</dd>{% endif %}
+            {% if f.evidence|default('', true) %}<dt>Evidence</dt><dd><pre>{{ f.evidence }}</pre></dd>{% endif %}
+            {% if f.remediation|default('', true) %}<dt>Remediation</dt><dd>{{ f.remediation }}</dd>{% endif %}
+            {% if f.raw_ref|default('', true) %}<dt>Raw</dt><dd><pre>{{ f.raw_ref }}</pre></dd>{% endif %}
+            {% if f.triage_note|default('', true) %}<dt>Triage note</dt><dd>{{ f.triage_note }}</dd>{% endif %}
+          </dl>
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if not findings %}<div class="empty">No findings.</div>{% endif %}
+  </div>
+</section>
+
+{% if finding_collisions %}
+<section>
+  <h2>Finding ID collisions ({{ finding_collisions|length }})</h2>
+  <p class="muted">Two DIFFERENT findings that hashed to the same id — a bug
+    in the emitting stage's matcher, not a duplicate. The first-submitted
+    finding was kept (deterministic, and real evidence) and the rest
+    discarded; each row below is one discarded finding. Identity only —
+    never evidence or matcher, which can carry scan-derived or secret
+    material — see <code>sweep.log</code> and
+    <code>artifacts/findings.jsonl</code> in this run directory for detail.</p>
+  <div class="tablewrap">
+    <table class="collisions"><thead><tr>
+      <th>Stage</th><th>Target</th><th>Template</th><th>Differing fields</th>
+    </tr></thead><tbody>
+    {% for c in finding_collisions %}
+      <tr><td>{{ c.stage }}</td><td class="muted">{{ c.target }}</td>
+          <td class="muted">{{ c.template_id }}</td>
+          <td class="muted">{{ c.differing_fields|join(', ') }}</td></tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+</section>
+{% endif %}
+
+<section>
+  <h2>Coverage — what was scanned and what wasn't</h2>
+  {% if targets_requested %}
+  <p class="muted">
+    <strong>Targets:</strong> {{ targets_requested }} requested,
+    {{ targets_permitted }} in scope{% if targets_requested - targets_permitted %},
+    {{ targets_requested - targets_permitted }} refused{% endif %}.
+  </p>
+  {% endif %}
+  {#- A narrowed port range, stated where the reader is already asking what
+      was not scanned. Without it a restricted run and an exhaustive one
+      produce the same-looking document, and only the exhaustive claim is
+      ever the dangerous one to get wrong. -#}
+  {% if ports %}
+  <p class="muted">
+    <strong>Ports:</strong> restricted by the operator to
+    <code>{{ ports }}</code>. Services outside that selection were not
+    scanned, at any stage: every later stage consumes the ports this one
+    discovered.
+  </p>
+  {% endif %}
+  {% if udp_ports %}
+  <p class="muted">
+    <strong>UDP ports:</strong> restricted by the operator to
+    <code>{{ udp_ports }}</code>. UDP services outside that selection were
+    not scanned.
+  </p>
+  {% endif %}
+  {% if proxy %}
+  <p class="muted">
+    <strong>HTTP proxy:</strong> every HTTP stage was configured to use
+    <code>{{ proxy }}</code>. Raw DNS, TCP, UDP, and TLS probes do not
+    traverse an HTTP proxy and ran directly.
+  </p>
+  {% endif %}
+  <div class="tablewrap">
+    <table class="cov"><thead><tr>
+      <th>Stage</th><th>Status</th><th>Class</th><th>Reason</th>
+    </tr></thead><tbody>
+    {% for c in coverage %}
+      <tr><td>{{ c.stage }}</td><td>{{ c.status }}</td>
+          <td class="muted">{{ c.failure }}</td><td class="muted">{{ c.reason }}</td></tr>
+    {% else %}
+      {#- "All selected stages completed" under an abort banner is the exact
+          pairing this section exists to prevent: where the interrupt lands
+          during the last stage every recorded result IS complete, and the
+          page would reassure the reader two inches under a banner saying it
+          did not finish. -#}
+      <tr><td colspan="4" class="muted">{% if aborted_reason %}Every stage that recorded a result completed, but the run was aborted before finishing — stages never reached are not listed here and were not scanned.{% else %}All selected stages completed.{% endif %}</td></tr>
+    {% endfor %}
+    </tbody></table>
+  </div>
+  {% if refusals %}
+  <p class="muted" style="margin-top:10px">Out-of-scope targets refused:
+    {% for r in refusals %}<code>{{ r.target }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+
+  {#- A SEPARATE block from `refusals` above, reading its own separately
+      accounted list, exactly as the Markdown report separates them.
+      `refusals` means "the operator supplied a target outside scope"
+      (possibly an RoE problem); this means "a stage discovered something
+      outside scope and admission control correctly did not scan it" --
+      expected, routine, and on a discovery-heavy run hundreds of entries,
+      which is why it is collapsed and why nothing here feeds the DEGRADED
+      banner. It is in the deliverable because these hosts are the basis of
+      a scope-extension conversation with the client, and this file is the
+      one the client is handed: "we found these, we did not touch them, do
+      you want them in scope?" cannot be had from a report that omits them.
+
+      Hostnames here come from crawl output and DNS -- attacker-influenced,
+      and rendered into a page that opens in the operator's browser. They
+      are escaped by the {% autoescape %} block at the top of this file, NOT
+      by the environment: see the ESCAPING note there. Uncapped, because the
+      Markdown twin lists all of them and the two must not report different
+      numbers of discovered hosts for one run. -#}
+  {% if discoveries_refused %}
+  <h3>Discovered, not scanned (out of scope) ({{ discoveries_refused|length }})</h3>
+  <p class="muted">Hosts a stage discovered during this run that are outside
+    scope. Not sent to any scanning stage. This is expected, routine output
+    and does not, by itself, mean this run is incomplete — but these are the
+    hosts to raise if scope should be extended.</p>
+  <details><summary>{{ discoveries_refused|length }} discovered host{{ 's' if discoveries_refused|length != 1 else '' }}</summary>
+    <ul class="assets">
+      {% for d in discoveries_refused %}<li><code>{{ d.host }}</code> <span class="muted">(via {{ d.stage }})</span></li>
+      {% endfor %}</ul>
+  </details>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Asset inventory</h2>
+  {#- `a.total`, never `a.shown|length`: the heading states how many were
+      found, not how many lines fit under the cap. -#}
+  {% for label, a in assets.items() %}
+  <details><summary>{{ label }} ({{ a.total }})</summary>
+    <ul class="assets">{% for v in a.shown %}<li>{{ v }}</li>{% endfor %}
+      {% if a.truncated %}<li class="muted">… and {{ a.truncated }} more {{ label|lower }} (truncated; see <code>artifacts/</code> in the run directory for the full list)</li>{% endif %}</ul>
+  </details>
+  {% else %}
+  <p class="muted">No assets recorded.</p>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Provenance</h2>
+  <ul class="assets">
+    {% for name, version in tool_versions.items() %}<li>{{ name }} {{ version }}</li>
+    {% else %}<li class="muted">No tool versions recorded.</li>{% endfor %}
+  </ul>
+</section>
+
+</main>
+
+<script>
+/* No finding-derived value is interpolated into this block. The single
+   interpolation is the fixed severity list above, which also generates the
+   sort map, so the client-side ordering cannot drift from the order the
+   page renders. Every attribute read here (data-sev, data-stage, data-host,
+   data-idx, data-text) is written by the loop above. */
+(function(){
+  var rows = Array.prototype.slice.call(
+    document.querySelectorAll('#findings tbody tr.finding'));
+  var off = Object.create(null);
+  var stage = document.getElementById('filter-stage');
+  var host  = document.getElementById('filter-host');
+  var search= document.getElementById('filter-search');
+  var count = document.getElementById('shown-count');
+
+  function detailFor(r){ return document.getElementById('d' + r.dataset.idx); }
+
+  function apply(){
+    var q = (search.value || '').toLowerCase(), n = 0;
+    rows.forEach(function(r){
+      var detail = detailFor(r);
+      var show = !off[r.dataset.sev]
+        && (!stage.value || r.dataset.stage === stage.value)
+        && (!host.value  || r.dataset.host  === host.value)
+        && (!q || r.dataset.text.indexOf(q) !== -1);
+      r.hidden = !show;
+      if (detail && !show) { detail.hidden = true; r.setAttribute('aria-expanded','false'); }
+      if (show) n++;
+    });
+    if (count) count.textContent = n;
+  }
+
+  function toggle(r){
+    var d = detailFor(r);
+    if (!d) return;
+    d.hidden = !d.hidden;
+    r.setAttribute('aria-expanded', d.hidden ? 'false' : 'true');
+  }
+
+  document.querySelectorAll('.sevtoggle').forEach(function(b){
+    b.addEventListener('click', function(){
+      var sev = b.dataset.sev;
+      off[sev] = !off[sev];
+      b.setAttribute('aria-pressed', off[sev] ? 'false' : 'true');
+      apply();
+    });
+  });
+  [stage, host].forEach(function(el){ el.addEventListener('change', apply); });
+  search.addEventListener('input', apply);
+
+  rows.forEach(function(r){
+    r.addEventListener('click', function(){
+      var sel = window.getSelection && window.getSelection().toString();
+      if (!sel) toggle(r);
+    });
+    r.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(r); }
+    });
+  });
+
+  var order = { {% for sev in order %}{{ sev }}:{{ loop.index0 }}, {% endfor %}unknown:99 };
+  function sortBy(th){
+    var asc = th.getAttribute('aria-sort') !== 'ascending';
+    var body = th.closest('table').querySelector('tbody');
+    var pairs = rows.map(function(r){ return [r, detailFor(r)]; });
+    pairs.sort(function(a, b){
+      var x, y;
+      if (th.dataset.sort === 'sev') {
+        x = order[a[0].dataset.sev]; y = order[b[0].dataset.sev];
+        if (x === undefined) x = 99;
+        if (y === undefined) y = 99;
+      } else {
+        x = a[0].cells[th.cellIndex].textContent.toLowerCase();
+        y = b[0].cells[th.cellIndex].textContent.toLowerCase();
+      }
+      return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1);
+    });
+    th.parentNode.querySelectorAll('th').forEach(function(o){
+      o.removeAttribute('aria-sort');
+    });
+    th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+    pairs.forEach(function(p){ body.appendChild(p[0]); if (p[1]) body.appendChild(p[1]); });
+  }
+
+  document.querySelectorAll('th[data-sort]').forEach(function(th){
+    th.addEventListener('click', function(){ sortBy(th); });
+    th.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(th); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
+{%- endautoescape %}

@@ -1,0 +1,27 @@
+# Authorised scope, one entry per line. Copy to targets.txt and edit.
+# targets*.txt is gitignored — hostnames are engagement-sensitive.
+#
+# DEFAULT-DENY. A bare entry matches ONLY itself:
+#
+#   acc.example           this host, nothing under it
+#   *.acc.example         the apex AND every subdomain
+#
+# The wildcard including the apex is deliberate — that is what the notation
+# means in a rules-of-engagement document. See sweeper/scope.py.
+#
+# IP literals and CIDR work too:
+#
+#   198.51.100.10
+#   198.51.100.0/24
+#
+# Anything a stage discovers that is not matched here is refused before any
+# request is issued, and listed in the report under "Discovered, not scanned".
+#
+# Note what this does NOT constrain: scope is per HOST, but services are
+# host:PORT. An all-ports scan of a name below reaches every service on its
+# IP, including ones the client may not own. Use --ports.
+# See docs/LIVE-PREFLIGHT.md.
+
+*.acc.example
+shop.acc.example
+198.51.100.10
