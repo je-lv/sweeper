@@ -125,7 +125,7 @@ Read [the live preflight](docs/LIVE-PREFLIGHT.md) before scanning infrastructure
 | `--proxy` | HTTP(S) proxy for every compatible HTTP stage |
 | `--auth-request` | Raw Burp-style request file for authenticated scanning |
 | `--yes` | Non-interactive acknowledgement for `high` |
-| `--acknowledge "I ACKNOWLEDGE"` | Required for state-mutating `full` runs |
+| `--ack` | Confirm a state-mutating `full` run |
 | `--resume` | Continue an interrupted run directory |
 | `--diff OLD NEW` | Compare two completed runs |
 
@@ -138,7 +138,7 @@ Read [the live preflight](docs/LIVE-PREFLIGHT.md) before scanning infrastructure
 | `low` | Top 100 TCP, top 20 UDP, high-signal checks | No | none |
 | `mid` | Top 1,000 TCP, top 100 UDP, curated templates and JS recon | Read-oriented probes | none |
 | `high` | All TCP, top 1,000 UDP, broad templates, crawling and headless checks | Read-oriented probes | `--yes` or interactive confirmation |
-| `full` | `high` plus DAST parameter fuzzing | **Yes** | exact typed acknowledgement |
+| `full` | `high` plus DAST parameter fuzzing | **Yes** | `--ack` or interactive confirmation |
 
 DNS and TLS configuration checks do not become shallower at lower levels. Content discovery grows by wordlist size, so its request count is origins multiplied by words. Use both `--rate` and `--time-limit` on live scopes.
 
@@ -150,7 +150,7 @@ What Sweeper enforces:
 
 - A default-deny hostname allowlist before discovered targets enter later stages.
 - Separate confirmation for discovered subdomains before they are scanned.
-- Typed acknowledgement for `high` and `full`, recorded in `run.json`.
+- Explicit acknowledgement for `high` and `full`, recorded in `run.json`.
 - Denial-of-service Nuclei templates excluded at every level.
 - ProjectDiscovery update checks disabled during assessments.
 - Request-rate and per-stage time controls propagated across the pipeline.

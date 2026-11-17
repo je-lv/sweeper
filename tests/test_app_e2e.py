@@ -813,33 +813,25 @@ def test_full_level_without_acknowledgement_is_refused(tmp_path, monkeypatch):
     assert _run_dirs(tmp_path) == [], "a run started despite the missing gate"
 
 
-def test_full_level_with_the_wrong_phrase_is_refused(tmp_path, monkeypatch):
+def test_removed_acknowledge_option_is_refused(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         _cli(tmp_path, monkeypatch, "-l", "full", "--acknowledge", "wrong phrase")
     assert exc.value.code != 0
     assert _run_dirs(tmp_path) == [], "a run started despite the missing gate"
 
 
-def test_full_level_with_a_near_miss_phrase_is_refused(tmp_path, monkeypatch):
-    """Case matters: Task 13 made the phrase impossible to fake by accident."""
-    with pytest.raises(SystemExit):
-        _cli(tmp_path, monkeypatch, "-l", "full", "--acknowledge", "i acknowledge")
-    assert _run_dirs(tmp_path) == []
-
-
-def test_full_level_with_the_exact_phrase_proceeds(tmp_path, monkeypatch):
-    assert _cli(tmp_path, monkeypatch, "-l", "full",
-                "--acknowledge", "I ACKNOWLEDGE") == 0
+def test_full_level_with_ack_proceeds(tmp_path, monkeypatch):
+    assert _cli(tmp_path, monkeypatch, "-l", "full", "--ack") == 0
     assert len(_run_dirs(tmp_path)) == 1
 
 
 def test_full_level_acknowledgement_is_recorded_in_the_manifest(tmp_path, monkeypatch):
-    _cli(tmp_path, monkeypatch, "-l", "full", "--acknowledge", "I ACKNOWLEDGE")
+    _cli(tmp_path, monkeypatch, "-l", "full", "--ack")
     run_dir = _run_dirs(tmp_path)[0]
     acks = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["acknowledgements"]
     assert len(acks) == 1
     assert acks[0]["level"] == "full"
-    assert acks[0]["phrase"] == "I ACKNOWLEDGE"
+    assert acks[0]["phrase"] == "--ack"
     assert acks[0]["via"] == "cli"
     assert acks[0]["at"]
 
@@ -943,7 +935,7 @@ def test_full_level_via_menu_path_without_acknowledgement_is_refused(tmp_path, m
     assert _run_dirs(tmp_path) == [], "a run started despite the missing gate"
 
 
-def test_full_level_via_menu_path_with_the_wrong_phrase_is_refused(tmp_path, monkeypatch):
+def test_full_level_via_menu_path_with_removed_option_is_refused(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         _cli_menu(tmp_path, monkeypatch, "-l", "full", "--acknowledge", "nope")
     assert _run_dirs(tmp_path) == []
@@ -957,25 +949,23 @@ def test_high_level_via_menu_path_without_yes_is_refused(tmp_path, monkeypatch):
 
 
 def test_full_level_via_menu_path_seeds_the_acknowledgement_on_menu_state(tmp_path, monkeypatch):
-    rc, seen = _cli_menu(tmp_path, monkeypatch, "-l", "full",
-                         "--acknowledge", "I ACKNOWLEDGE")
+    rc, seen = _cli_menu(tmp_path, monkeypatch, "-l", "full", "--ack")
     assert rc == 0
     assert seen["level"] == "full"
     assert len(seen["acknowledgements"]) == 1
-    assert seen["acknowledgements"][0]["phrase"] == "I ACKNOWLEDGE"
+    assert seen["acknowledgements"][0]["phrase"] == "--ack"
     assert seen["acknowledgements"][0]["via"] == "cli"
 
 
 def test_acknowledgement_from_cli_survives_a_run_started_in_the_repl(tmp_path, monkeypatch):
     """The whole point: the authorisation must reach the manifest of the run."""
-    rc, seen = _cli_menu(tmp_path, monkeypatch, "-l", "full",
-                         "--acknowledge", "I ACKNOWLEDGE", run_it=True)
+    rc, seen = _cli_menu(tmp_path, monkeypatch, "-l", "full", "--ack", run_it=True)
     assert rc == 0
     run_dir = _run_dirs(tmp_path)[0]
     manifest = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert manifest["level"] == "full"
     assert len(manifest["acknowledgements"]) == 1
-    assert manifest["acknowledgements"][0]["phrase"] == "I ACKNOWLEDGE"
+    assert manifest["acknowledgements"][0]["phrase"] == "--ack"
     assert manifest["acknowledgements"][0]["via"] == "cli"
 
 

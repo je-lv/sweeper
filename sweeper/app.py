@@ -32,7 +32,6 @@ from .stages.tlsx import TlsxStage
 from .stages.vhost import VhostStage
 from .triage import TriageState, default_triage_path
 from .ui import theme
-from .ui.menu import ACK_PHRASE
 
 ALL_STAGES = (
     SubfinderStage, DnsxStage, DnssecStage, MaildnsStage, CdncheckStage,
@@ -179,7 +178,7 @@ def execute(config: RunConfig, on_progress=None, acknowledgements=None,
     stages = build_stages(config)
 
     ctx = prepare(config)
-    # The typed acknowledgement for a full-level run is the operator's
+    # The acknowledgement for a full-level run is the operator's
     # recorded authorisation. Held on MenuState, it dies with the process;
     # the manifest is where it has to land to be worth anything.
     ctx.acknowledgements = list(acknowledgements or [])
@@ -504,10 +503,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--yes", action="store_true",
                     help="confirm a `high` run non-interactively (a full "
                          "65535-port sweep unless --ports narrows it)")
-    ap.add_argument("--acknowledge", default="",
-                    help='required for `--level full`: must be exactly '
-                         '"I ACKNOWLEDGE". Enables dast parameter fuzzing, '
-                         "which MUTATES application state.")
+    ap.add_argument("--ack", action="store_true",
+                    help="confirm a `full` run, which enables dast parameter "
+                         "fuzzing and MUTATES application state")
     ap.add_argument("--resume", type=Path,
                     help="resume an interrupted run directory")
     ap.add_argument("--diff", nargs=2, type=Path, metavar=("OLD", "NEW"),
@@ -585,20 +583,20 @@ def main(argv: list[str] | None = None) -> int:
         scan = f"{tcp} and scans UDP {udp}"
         ap.error(f"--level high {scan}. Re-run with --yes to confirm.")
     if args.level == "high":
-        # Spec: both the `high` confirmation and the `full` typed
-        # acknowledgement are recorded in the manifest with a timestamp.
+        # Spec: acknowledgements for both the `high` and `full` confirmations
+        # are recorded in the manifest with a timestamp.
         # Only `full` was — `high` confirmed and then left no trace it had
         # been confirmed at all.
         cli_acks.append({"level": "high", "phrase": "--yes",
                          "via": "cli", "at": utcnow()})
     if args.level == "full":
-        if args.acknowledge.strip() != ACK_PHRASE:
+        if not args.ack:
             ap.error(
                 "--level full enables dast parameter fuzzing, which MUTATES "
                 "application state (orders, coupons, carts). Re-run with "
-                f'--acknowledge "{ACK_PHRASE}" to proceed.'
+                "--ack to proceed."
             )
-        cli_acks.append({"level": "full", "phrase": args.acknowledge.strip(),
+        cli_acks.append({"level": "full", "phrase": "--ack",
                          "via": "cli", "at": utcnow()})
 
     # Validate the resolver value HERE, before a RunContext (and therefore a
@@ -713,7 +711,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_menu:
         from .ui.menu import MenuState, run_menu
         # Seed the acknowledgement given on the command line. Without this,
-        # `-l full --acknowledge "I ACKNOWLEDGE"` passes the gate and then
+        # `-l full --ack` passes the gate and then
         # records nothing, so the authorisation the operator just gave is
         # absent from the manifest of the run it authorised.
         state = MenuState(config, acknowledgements=list(cli_acks),

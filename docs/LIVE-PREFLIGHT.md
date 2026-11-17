@@ -92,8 +92,8 @@ the stage.
 - `high` is a full TCP and top-1,000 UDP sweep of every host in scope.
   Rate-limited, but a sweep; UDP can be materially slower than TCP.
 - `full` additionally **mutates application state** — it places orders, applies
-  coupons and fuzzes parameters against live data. That is what the typed
-  `--acknowledge "I ACKNOWLEDGE"` gate exists for. Do not run it against
+  coupons and fuzzes parameters against live data. That is what the explicit
+  `--ack` gate exists for. Do not run it against
   production unless that is in the RoE in writing.
 
 ## 5. The run
